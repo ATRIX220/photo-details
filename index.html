@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Détails</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<!-- Bibliothèque "exifr" : elle sait lire les métadonnées cachées dans les photos -->
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<style>
+/* ============================================================
+   STYLE (CSS) : les couleurs, les polices, la mise en page.
+   Idée : une "fiche de scellé" de labo, comme une pièce à conviction.
+   ============================================================ */
+:root {
+  --bg: #eef1f4;        /* fond de page */
+  --card: #ffffff;      /* fond des fiches */
+  --ink: #16202b;       /* texte principal */
+  --muted: #5b6875;     /* texte secondaire */
+  --line: #d3dae1;      /* traits de séparation */
+  --accent: green;    /* jaune "ruban de scène de crime" */
+  --alert: #b3261e;     /* rouge pour les infos sensibles (GPS) */
+  --font-titre: "Archivo Narrow", "Arial Narrow", sans-serif;
+  --font-texte: "Source Sans 3", system-ui, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f151b; --card: #172029; --ink: #e4e9ee; --muted: #93a1ae;
+    --line: #2a3642; --accent: green; --alert: #ff7a70; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f151b; --card: #172029; --ink: #e4e9ee; --muted: #93a1ae;
+  --line: #2a3642; --accent: green; --alert: #ff7a70; color-scheme: dark;
+}
+
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-texte); font-size: 16px; line-height: 1.5;
+}
+.page {
+  max-width: 760px; margin: 0 auto;
+  padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 20px;
+}
+
+h1 {
+  font-family: var(--font-titre); font-size: 2.4rem; line-height: 1;
+  margin: 0; letter-spacing: 0.01em; text-wrap: balance;
+}
+h1 span { color: var(--accent); }
+.intro { margin: 6px 0 0; color: var(--muted); max-width: 60ch; }
+
+/* Zone où on dépose la photo */
+.depot {
+  border: 2px dashed var(--line); border-radius: 10px; background: var(--card);
+  padding: 28px 16px; text-align: center; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.depot.survol { border-color: var(--accent); }
+.bouton {
+  font: 600 1rem var(--font-texte); color: #fff; background: var(--ink);
+  border: 0; border-radius: 6px; padding: 12px 20px; cursor: pointer;
+}
+:root[data-theme="dark"] .bouton { color: var(--bg); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bouton { color: var(--bg); } }
+.bouton:focus-visible, .depot:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.petit { font-size: 0.85rem; color: var(--muted); margin: 0; }
+
+/* Fiche de résultat pour une photo */
+.fiche { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.fiche-tete {
+  display: flex; gap: 14px; align-items: center; padding: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.fiche-tete img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; background: var(--line); flex: none; }
+.fiche-tete div { min-width: 0; }
+.nom { font-family: var(--font-data); font-weight: 600; overflow-wrap: anywhere; }
+.etiquette {
+  display: inline-block; font: 600 0.72rem var(--font-data); letter-spacing: 0.08em;
+  text-transform: uppercase; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid currentColor; margin-top: 4px;
+}
+.etiquette.gps { color: var(--alert); }
+.etiquette.ok { color: var(--muted); }
+.etiquette.exemple { color: var(--accent); }
+
+dl { margin: 0; display: grid; grid-template-columns: minmax(110px, 34%) 1fr; }
+dt, dd { margin: 0; padding: 9px 14px; border-bottom: 1px solid var(--line); }
+dt {
+  font: 600 0.75rem var(--font-data); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); padding-top: 11px;
+}
+dd { font-family: var(--font-data); font-size: 0.92rem; overflow-wrap: anywhere; min-width: 0; }
+dd a { color: var(--accent); }
+dd.sensible { color: var(--alert); font-weight: 600; }
+
+details { padding: 12px 14px; }
+summary { cursor: pointer; font-weight: 600; }
+.tout { overflow-x: auto; margin-top: 10px; }
+.tout table { border-collapse: collapse; font: 0.8rem var(--font-data); width: 100%; }
+.tout td { border-top: 1px solid var(--line); padding: 5px 8px; vertical-align: top; }
+.tout td:first-child { color: var(--muted); white-space: nowrap; }
+
+.note {
+  border-left: 3px solid var(--accent); padding: 4px 0 4px 14px;
+  color: var(--muted); font-size: 0.92rem; max-width: 65ch;
+}
+.note strong { color: var(--ink); }
+.signature {
+   color: var(--accent);
+   text-align: center;
+   font-size: 21px;
+}
+</style>
+
+<!-- ============================================================
+     STRUCTURE (HTML) : ce qu'on voit sur la page.
+     ============================================================ -->
+<main class="page">
+  <header>
+    <h1>Photo <span>Détails</span></h1>
+    <p class="intro">Choisis une photo pour voir les infos cachées dedans : appareil, date, réglages et parfois l'endroit exact où elle a été prise.</p>
+  </header>
+
+  <label class="depot" id="depot" for="choix" tabindex="0">
+    <span class="bouton">Choisir une ou plusieurs photos</span>
+    <p class="petit">Ou glisse-les ici. Rien n'est envoyé sur internet : l'analyse se fait sur ton appareil.</p>
+    <input type="file" id="choix" accept="image/*" multiple hidden>
+  </label>
+
+  <!-- Les fiches de résultat viendront s'ajouter ici -->
+  <section id="resultats" style="display:flex;flex-direction:column;gap:16px"></section>
+
+  <p class="note"><strong>Astuce OSINT :</strong> WhatsApp, Instagram, Discord ou Facebook effacent la plupart des métadonnées. Une photo « brute » envoyée par mail ou par clé USB les garde souvent. Certains téléphones retirent aussi la position GPS quand on choisit la photo depuis la galerie du navigateur.</p>
+<p class="signature" id="signature"><strong>Créé par atrix</strong></p>
+</main>
+
+<script>
+// ============================================================
+// LOGIQUE (JavaScript) : ce qui se passe quand on choisit une photo.
+// ============================================================
+
+const champFichier = document.getElementById("choix");
+const zoneDepot = document.getElementById("depot");
+const resultats = document.getElementById("resultats");
+
+// 1) Quand on choisit des fichiers avec le bouton
+champFichier.addEventListener("change", () => analyserFichiers(champFichier.files));
+
+// 2) Quand on glisse-dépose des fichiers dans la zone
+zoneDepot.addEventListener("dragover", (e) => { e.preventDefault(); zoneDepot.classList.add("survol"); });
+zoneDepot.addEventListener("dragleave", () => zoneDepot.classList.remove("survol"));
+zoneDepot.addEventListener("drop", (e) => {
+  e.preventDefault();
+  zoneDepot.classList.remove("survol");
+  analyserFichiers(e.dataTransfer.files);
+});
+// Permet d'ouvrir le sélecteur avec la touche Entrée (accessibilité clavier)
+zoneDepot.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); champFichier.click(); } });
+
+// Analyse chaque fichier, l'un après l'autre
+async function analyserFichiers(fichiers) {
+  resultats.innerHTML = ""; // on efface l'exemple ou les anciens résultats
+  for (const fichier of fichiers) {
+    let donnees = null;
+    try {
+      // exifr lit TOUTES les métadonnées disponibles (EXIF, GPS, XMP...)
+      donnees = await exifr.parse(fichier, true);
+    } catch (erreur) {
+      console.warn("Lecture impossible :", erreur);
+    }
+    const apercu = URL.createObjectURL(fichier); // petite image d'aperçu
+    const fiche = creerFiche(fichier.name, fichier.size, apercu, donnees, false);
+    fiche.appendChild(creerBoutonNettoyer(fichier));
+    resultats.appendChild(fiche);  }
+}
+
+// Fabrique la fiche HTML d'une photo à partir de ses métadonnées
+function creerFiche(nom, taille, apercu, d, estExemple) {
+  const fiche = document.createElement("article");
+  fiche.className = "fiche";
+
+  // Position GPS (si elle existe)
+  const lat = d && d.latitude, lon = d && d.longitude;
+  // Number.isFinite vérifie que c'est un VRAI nombre (et pas NaN = "Not a Number")
+  const aGPS = Number.isFinite(lat) && Number.isFinite(lon) && !(lat === 0 && lon === 0);
+  // La photo a des cases GPS... mais vides (souvent effacées par le téléphone)
+  const gpsEfface = !aGPS && d && Object.keys(d).some(k => k.startsWith("GPS") || k === "latitude");
+
+  let etiquette;
+  if (estExemple) etiquette = '<span class="etiquette exemple">Exemple</span>';
+  else if (!d) etiquette = '<span class="etiquette ok">Aucune métadonnée trouvée</span>';
+  else if (aGPS) etiquette = '<span class="etiquette gps">Position GPS présente</span>';
+  else if (gpsEfface) etiquette = '<span class="etiquette ok">GPS effacé</span>';
+  else etiquette = '<span class="etiquette ok">Pas de GPS</span>';
+
+  fiche.innerHTML = `
+    <div class="fiche-tete">
+      ${apercu ? `<img src="${apercu}" alt="">` : ""}
+      <div><div class="nom">${echapper(nom)}</div>
+      <div class="petit">${formaterTaille(taille)}</div>${etiquette}</div>
+    </div>`;
+
+  if (!d) return fiche;
+
+  // La liste des infos les plus intéressantes pour une enquête
+  const lignes = [
+    ["Appareil", [d.Make, d.Model].filter(Boolean).join(" ")],
+    ["Objectif", d.LensModel],
+    ["Prise le", formaterDate(d.DateTimeOriginal || d.CreateDate)],
+    ["Modifiée le", formaterDate(d.ModifyDate)],
+    ["Logiciel", d.Software],
+    ["Dimensions", d.ExifImageWidth && `${d.ExifImageWidth} × ${d.ExifImageHeight} px`],
+    ["Réglages", [d.FNumber && "f/" + d.FNumber, d.ExposureTime && formaterExpo(d.ExposureTime), d.ISO && "ISO " + d.ISO, d.FocalLength && d.FocalLength + " mm"].filter(Boolean).join(" · ")],
+    ["Auteur", d.Artist || d.Copyright],
+  ];
+
+  const dl = document.createElement("dl");
+  if (aGPS) {
+    const coord = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    dl.innerHTML += `<dt>Position GPS</dt><dd class="sensible">${coord}<br>
+      <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=17/${lat}/${lon}" target="_blank" rel="noopener">OpenStreetMap</a> ·
+      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" rel="noopener">Google Maps</a></dd>`;
+    if (Number.isFinite(d.GPSAltitude)) dl.innerHTML += `<dt>Altitude</dt><dd>${Math.round(d.GPSAltitude)} m</dd>`;
+  } else if (gpsEfface) {
+    dl.innerHTML += `<dt>Position GPS</dt><dd>Les cases GPS existent mais sont vides : la position a été effacée (par le téléphone, le navigateur ou une appli).</dd>`;
+  }
+  for (const [titre, valeur] of lignes) {
+    if (valeur) dl.innerHTML += `<dt>${titre}</dt><dd>${echapper(String(valeur))}</dd>`;
+  }
+  fiche.appendChild(dl);
+
+  // Tableau complet de toutes les données brutes (repliable)
+  const details = document.createElement("details");
+  const rangees = Object.entries(d)
+    .filter(([, v]) => typeof v !== "object" || v instanceof Date)
+    .map(([k, v]) => `<tr><td>${echapper(k)}</td><td>${echapper(String(v))}</td></tr>`).join("");
+  details.innerHTML = `<summary>Toutes les données brutes (${Object.keys(d).length})</summary>
+    <div class="tout"><table>${rangees}</table></div>`;
+  fiche.appendChild(details);
+  return fiche;
+}
+
+// Lit une photo, même au format HEIC (iPhone, Samsung...)
+async function lireImage(fichier) {
+  try {
+    // Marche directement pour les JPG, PNG, WEBP...
+    return await createImageBitmap(fichier);
+  } catch (erreur) {
+    // Sinon, c'est sûrement du HEIC : on le convertit d'abord en JPG avec heic2any
+    let jpg = await heic2any({ blob: fichier, toType: "image/jpeg", quality: 0.92 });
+    if (Array.isArray(jpg)) jpg = jpg[0]; // certaines photos HEIC contiennent plusieurs images
+    return await createImageBitmap(jpg);
+  }
+}
+
+// Crée un bouton qui fabrique une copie de la photo SANS métadonnées
+function creerBoutonNettoyer(fichier) {
+  const bouton = document.createElement("button");
+  bouton.className = "bouton";
+  bouton.textContent = "Effacer les données";
+  bouton.style.margin = "0 14px 14px";
+
+  bouton.addEventListener("click", async () => {
+    // 1) On redessine la photo sur une toile vierge (un "canvas")
+    const toile = document.createElement("canvas");
+        let image;
+    try {
+      image = await lireImage(fichier);
+    } catch (erreur) {
+      bouton.textContent = "Format non pris en charge (HEIC ?)";
+      return;
+    }
+    toile.width = image.width;
+    toile.height = image.height;
+    toile.getContext("2d").drawImage(image, 0, 0);
+
+    // 2) On enregistre la toile en JPEG : seuls les pixels sont gardés, pas les métadonnées
+    toile.toBlob((blob) => {
+      const lien = document.createElement("a");
+      lien.href = URL.createObjectURL(blob);
+      lien.download = "propre_" + fichier.name.replace(/\.\w+$/, "") + ".jpg";
+      lien.click(); // lance le téléchargement
+    }, "image/jpeg", 0.92);
+  });
+
+  return bouton;
+}// ---------- Petites fonctions utilitaires ----------
+function formaterDate(date) {
+  if (!(date instanceof Date) || isNaN(date)) return "";
+  return date.toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" });
+}
+function formaterExpo(t) { return t >= 1 ? t + " s" : "1/" + Math.round(1 / t) + " s"; }
+function formaterTaille(o) { return o > 1048576 ? (o / 1048576).toFixed(1) + " Mo" : Math.round(o / 1024) + " Ko"; }
+// Évite qu'un texte piégé dans une photo injecte du code dans la page
+function echapper(t) { return t.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+const signature = document.getElementById("signature");
+signature.addEventListener("click", () => {
+    if (signature.textContent === "Créé par atrix") {
+    signature.textContent = "Merci d'utiliser mon site !";
+  } else {
+    signature.textContent = "Créé par atrix";
+  }
+});
+// Au démarrage : on affiche une fiche d'exemple pour montrer à quoi ça ressemble
+resultats.appendChild(creerFiche("IMG_20240714_221503.jpg", 3481200, null, {
+  Make: "samsung", Model: "SM-S911B", Software: "S911BXXU3BWK5",
+  DateTimeOriginal: new Date(2024, 6, 14, 22, 15), ModifyDate: new Date(2024, 6, 14, 22, 15),
+  ExifImageWidth: 4000, ExifImageHeight: 3000, FNumber: 1.8, ExposureTime: 1 / 60, ISO: 640, FocalLength: 5.4,
+  latitude: 48.858370, longitude: 2.294481, GPSAltitude: 41,
+}, true));
+</script>
+
+</html>
